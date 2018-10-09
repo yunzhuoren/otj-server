@@ -1,5 +1,7 @@
 package com.opentable.server;
 
+import javax.servlet.Filter;
+
 import org.jboss.resteasy.plugins.server.servlet.Filter30Dispatcher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -8,6 +10,9 @@ import org.springframework.context.annotation.Import;
 import com.opentable.components.filterorder.FilterOrderResolverConfiguration;
 import com.opentable.components.filterorder.OrderDeclaration;
 
+/**
+ * Configures the order {@link Filter}s are applied in
+ */
 @Configuration
 @Import(FilterOrderResolverConfiguration.class)
 public class FilterOrderConfiguration {

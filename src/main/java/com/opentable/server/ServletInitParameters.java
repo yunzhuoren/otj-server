@@ -2,6 +2,9 @@ package com.opentable.server;
 
 import java.util.Map;
 
+/**
+ * Returns servlet init params to set on the servlet
+ */
 @FunctionalInterface
 public interface ServletInitParameters {
 

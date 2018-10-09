@@ -14,6 +14,12 @@ import com.opentable.logging.AssimilateForeignLogging;
 import com.opentable.logging.CommonLogHolder;
 
 /* Registered via META-INF/spring.factories to capture early application lifecycle events */
+/**
+ * Server Logging Configuration
+ * Redirects JUL (java.util.logging) to logback via slf4j.
+ * Sets service name for logs on application start
+ * Stops logback logging if application fails to start
+ */
 class ServerLoggingConfiguration implements ApplicationListener<ApplicationEvent> {
     private static final Logger LOG = LoggerFactory.getLogger(ServerLoggingConfiguration.class);
 

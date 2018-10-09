@@ -18,6 +18,9 @@ import javax.ws.rs.ext.Provider;
 
 import org.jboss.resteasy.plugins.interceptors.CorsFilter;
 
+/**
+ * Setup a CORS filter to always allow Cross Origin Requests regardless of origin and to set the appropriate CORS headers
+ */
 @Provider
 @PreMatching
 class OTCorsFilter extends CorsFilter

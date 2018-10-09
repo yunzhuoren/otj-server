@@ -16,28 +16,55 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 // TODO Don't serve directory indexes.
 
+/**
+ * Configures serving of static resources
+ */
 @Configuration
 public class StaticResourceConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(StaticResourceConfiguration.class);
 
+    /**
+     * Default name of folder on classpath with static assets
+     */
     static final String DEFAULT_PATH_NAME = "static";
+
+    /**
+     * SpEL expression to get the name of the classpath directory with static assets
+     */
     private static final String PATH_CONFIG_VALUE = "${ot.httpserver.static-path:" + DEFAULT_PATH_NAME + "}";
 
     private final String staticPathName;
 
+    /**
+     * Create static resource configuration
+     * @param staticPathName the name of the directory with static assets to serve
+     */
     @Inject
     StaticResourceConfiguration(@Value(PATH_CONFIG_VALUE) final String staticPathName) {
         this.staticPathName = staticPathName;
     }
 
+    /**
+     * Get the path to the directory with static assets
+     * @return the path to the directory with static assets
+     */
     public String staticPath() {
         return staticPath("");
     }
 
+    /**
+     * Get the path to a sub-directory with static assets. The argument path passed in will be returned prefixed by the static directory
+     * @param rest the rest of the (excluding the directory with static assets), do not prefix with a slash
+     * @return the full path to the static assets directory requested
+     */
     public String staticPath(final String rest) {
         return String.format("/%s/%s", staticPathName, rest);
     }
 
+    /**
+     * Create a bean to register a servlet for serving static resources
+     * @return a servlet registration bean for static resources
+     */
     @Bean
     @SuppressFBWarnings("NP_LOAD_OF_KNOWN_NULL_VALUE")
     public ServletRegistrationBean<DefaultServlet> staticResourceServlet() {

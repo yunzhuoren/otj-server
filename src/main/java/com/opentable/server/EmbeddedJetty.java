@@ -48,12 +48,20 @@ public class EmbeddedJetty extends EmbeddedJettyBase {
 
 
     /**
+     * Creates a Servlet Web Server Factory that is used to create the WebServer we will be using.
+     * Specifically, this creates an auto-starting JettyWebServer with a 10 minute session timeout.
+     * We also setup JSON request logging, statistics, and a graceful shutdown. Numerous customizers are also applied.
+     *
      * @param filterOrderResolver The filter order resolver is injected here since this method is the one in which we
      *                            kick off the initialization of the Jetty servlet container, which includes wiring up
      *                            the filter registration beans. We therefore want to make sure that we have resolved
      *                            the order of these filters. It is ok and expected that this variable is not used in
      *                            this method.
-     * @return
+     * @param requestLogConfig configuration for logging requests in JSON format
+     * @param activeConnectors map of connector name to connector configuration
+     * @param pr property resolver for getting values of config properties
+     *
+     * @return the servlet web server factory
      */
     @Bean
     public ServletWebServerFactory servletContainer(
@@ -90,6 +98,9 @@ public class EmbeddedJetty extends EmbeddedJettyBase {
         return factoryAdapter.getFactory();
     }
 
+    /**
+     * Jetty Web Server Factory Adapter. Essentially proxies to a {@link JettyServletWebServerFactory} instance.
+     */
     static class JettyWebServerFactoryAdapter implements WebServerFactoryAdapter<JettyServletWebServerFactory> {
         private final JettyServletWebServerFactory factory;
 

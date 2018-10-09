@@ -30,6 +30,14 @@ import com.opentable.logging.jetty.JsonRequestLogConfig;
 @Import(JsonRequestLogConfig.class)
 public class EmbeddedReactiveJetty extends EmbeddedJettyBase {
 
+    /**
+     * Create and configure a Jetty reactive web server. Sets up things like the thread pool, JSON request logging, graceful shutdown, etc.
+     *
+     * @param requestLogConfig the JSON request log configuration
+     * @param activeConnectors a map of connector names to server connector configuration
+     * @param pr the property resolver
+     * @return the Jetty reactive server
+     */
     @Bean
     public JettyReactiveWebServerFactory webServerFactory(final JsonRequestLogConfig requestLogConfig,
                                                           final Map<String, ServerConnectorConfig> activeConnectors,
@@ -48,6 +56,10 @@ public class EmbeddedReactiveJetty extends EmbeddedJettyBase {
 
     }
 
+    /**
+     * Jetty Reactive Web Server Factory Adapter. Proxies to {@link JettyReactiveWebServerFactory}.
+     * Setting session timeout and servlet context initializers are not supported.
+     */
     static class JettyReactiveWebServerFactoryAdapter implements WebServerFactoryAdapter<JettyReactiveWebServerFactory> {
         private final JettyReactiveWebServerFactory factory;
 

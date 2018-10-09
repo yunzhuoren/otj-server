@@ -100,12 +100,18 @@ public final class OTApplication {
 
     /**
      * Return the base URI for a given application context.  Mostly useful in tests.
+     * @param ctx application context
+     * @return URI of application for HTTP requests
      */
     public static URI getBaseUri(ConfigurableApplicationContext ctx) {
         return getBaseUri(ctx, "default");
     }
+
     /**
      * Return the base URI for a given application context.  Mostly useful in tests.
+     * @param ctx application context
+     * @param connector the connector to get the URI for (at this point, this must be "default")
+     * @return URI of the application for the given connector (i.e. http://127.0.0.1:<HTTP Port>)
      */
     public static URI getBaseUri(ConfigurableApplicationContext ctx, String connector) {
         Preconditions.checkState("default".equals(connector), "TODO: implement non-default connectors");

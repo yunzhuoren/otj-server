@@ -12,11 +12,18 @@ import javax.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Logs debug information from the manifest about the name of the system starting up, its version, and the commit ID.
+ */
 public class CheckManifest {
     private static final String COMMIT = "X-BasePOM-Git-Commit-Id";
 
     private static final Logger LOG = LoggerFactory.getLogger(CheckManifest.class);
 
+    /**
+     * Find all manifests to log out information about them
+     * @throws IOException I/O issue reading manifest file
+     */
     public void readManifests() throws IOException {
         final Enumeration<URL> urlsEnum = Thread.currentThread().getContextClassLoader().getResources("META-INF/MANIFEST.MF");
         while (urlsEnum.hasMoreElements()) {
@@ -24,6 +31,11 @@ public class CheckManifest {
         }
     }
 
+    /**
+     * Read the given manifest and log information from it
+     * @param url the URL of the manifest to read
+     * @throws IOException I/O issue reading manifest file
+     */
     private void readManifest(final URL url) throws IOException {
         try (InputStream is = url.openStream()) {
             final Manifest mf = new Manifest();
@@ -37,6 +49,9 @@ public class CheckManifest {
         }
     }
 
+    /**
+     * Attempts to read the manifest and log out information about it when this bean is created at startup
+     */
     @PostConstruct
     public void start() {
         try {

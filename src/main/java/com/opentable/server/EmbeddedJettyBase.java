@@ -45,6 +45,7 @@ import org.springframework.boot.web.context.WebServerInitializedEvent;
 import org.springframework.boot.web.embedded.jetty.JettyServerCustomizer;
 import org.springframework.boot.web.embedded.jetty.JettyWebServer;
 import org.springframework.boot.web.server.WebServer;
+import org.springframework.boot.web.server.WebServerFactory;
 import org.springframework.boot.web.servlet.ServletContextInitializer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -60,6 +61,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import com.opentable.logging.jetty.JsonRequestLog;
 import com.opentable.logging.jetty.JsonRequestLogConfig;
+import com.opentable.metrics.JettyServerMetricsConfiguration;
 import com.opentable.server.HttpServerInfo.ConnectorInfo;
 import com.opentable.spring.SpecializedConfigFactory;
 import com.opentable.util.Optionals;
@@ -104,12 +106,23 @@ public abstract class EmbeddedJettyBase {
      */
     private volatile Integer httpActualPort;
 
+    /**
+     * Thread pool to use for Jetty requests, typically provided by {@link JettyServerMetricsConfiguration#getIQTPProvider(com.codahale.metrics.MetricRegistry, int)}
+     */
     @Inject
     Optional<Provider<QueuedThreadPool>> qtpProvider;
 
+    /**
+     * Customizers to customize Handlers, may include:
+     *  - {@link JettyServerMetricsConfiguration#getHandlerCustomizer(com.codahale.metrics.MetricRegistry)} to instrument the handlers to report metrics
+     */
     @Inject
     Optional<Collection<Function<Handler, Handler>>> handlerCustomizers;
 
+    /**
+     * Consumers to customize the server, may include:
+     *  - {@link JettyServerMetricsConfiguration#statusReporter(com.codahale.metrics.MetricRegistry)} to report metrics for HTTP statuses
+     */
     @Inject
     Optional<Collection<Consumer<Server>>> serverCustomizers;
 
@@ -124,6 +137,15 @@ public abstract class EmbeddedJettyBase {
 
     private Map<String, ConnectorInfo> connectorInfos;
 
+    /**
+     * Create a map of connector names to connector configuration information
+     * We take the list of connectors to create from the comma separated list ot.httpserver.active-connectors, or if that's missing default to just default-http,
+     * and for each connector on that list we look for config properties named with the pattern ot.httpserver.connector.<connector name>.<config key name> and use it to create
+     * config objects.
+     *
+     * @param configFactory the factory to create config objects, created in {@link ServerConfigConfiguration#connectorConfigs(PropertyResolver)}
+     * @return map of connector names to connector configuration information
+     */
     @Bean
     Map<String, ServerConnectorConfig> activeConnectors(SpecializedConfigFactory<ServerConnectorConfig> configFactory) {
         final ImmutableMap.Builder<String, ServerConnectorConfig> builder = ImmutableMap.builder();
@@ -135,6 +157,22 @@ public abstract class EmbeddedJettyBase {
     }
 
 
+    /**
+     * Configures a Web Server Factory with the following customizations:
+     *
+     * Custom Thread Pool is set if present. The thread pool will have it's min and max threads set to ot.httpserver.max-threads or a default of 32.
+     * MBean Server is added if present
+     * Any Handler Customizers are applied
+     * JSON Request Logging is setup
+     * Jetty's Statistics Handler is added
+     * Server's graceful stop timeout is set to ot.httpserver.shutdown-timeout (or 5 second default)
+     *
+     *
+     * @param requestLogConfig configuration for request logging
+     * @param activeConnectors map of connector name to configuration
+     * @param pr the property resolver
+     * @param factory the web server factory to customize
+     */
     protected void configureFactoryContainer(
             final JsonRequestLogConfig requestLogConfig,
             final Map<String, ServerConnectorConfig> activeConnectors,
@@ -197,6 +235,16 @@ public abstract class EmbeddedJettyBase {
                 }));
     }
 
+    /**
+     * Creates connection factories based on configuration, sets up HTTPS security, and selects port.
+     * The created connector is added to the server. We return information about the server connector.
+     *
+     * @param server the server to add the connector to
+     * @param name the name of the connector
+     * @param port the port for the connector to listen on, used only if the config does not specify a port
+     * @param config the connector configuration
+     * @return information about the server connector
+     */
     @SuppressWarnings("resource")
     @SuppressFBWarnings("SF_SWITCH_FALLTHROUGH")
     private ConnectorInfo createConnector(Server server, String name, IntSupplier port, ServerConnectorConfig config) {
@@ -247,6 +295,14 @@ public abstract class EmbeddedJettyBase {
         return new ServerConnectorInfo(name, connector, config);
     }
 
+    /**
+     * Select a port to use for the connector. If the connector configuration specifies a (non-negative) port, we will use it,
+     * otherwise we'll just get the next assigned port (based on config properties PORT0, PORT1, etc., we'll use the next unused one).
+     *
+     * @param nextAssignedPort supplier that will return the next assigned port
+     * @param connectorConfig the server connector configuration
+     * @return the port to use
+     */
     private int selectPort(IntSupplier nextAssignedPort, ServerConnectorConfig connectorConfig) {
         int configuredPort = connectorConfig.getPort();
         if (configuredPort < 0) {
@@ -255,6 +311,12 @@ public abstract class EmbeddedJettyBase {
         return configuredPort;
     }
 
+    /**
+     * Size the servlet request thread pool. We set the minimum number of threads and the maximum number of threads in the pool to the same value.
+     * This is done because we believe that it always better to eagerly initialize the threads, lest we find out that we can't when we need to.
+     *
+     * @param server the server to size the thread pool of
+     */
     private void sizeThreadPool(Server server) {
         Verify.verify(minThreads == null, "'ot.httpserver.min-threads' has been removed on the " +
                 "theory that it is always preferable to eagerly initialize worker threads " +
@@ -266,6 +328,13 @@ public abstract class EmbeddedJettyBase {
         qtp.setMaxThreads(maxThreads);
     }
 
+    /**
+     * When the web server is initialized, get the actual port it is listening to. Also, save the web server reference.
+     * Log a dump of Jetty debug information at the TRACE level. Log thread pool at the info level.
+     *
+     * @param evt Event to be published after the application context is refreshed and the WebServer is ready.
+     * @throws IOException I/O error writing Jetty debug info to the {@link StringBuilder}
+     */
     @EventListener
     @Order(Ordered.HIGHEST_PRECEDENCE)
     public void containerInitialized(final WebServerInitializedEvent evt) throws IOException {
@@ -286,6 +355,10 @@ public abstract class EmbeddedJettyBase {
 
     // XXX: this is a workaround for
     // https://github.com/spring-projects/spring-boot/issues/4657
+    /**
+     * Close the {@link WebServer} when the Spring context gets closed
+     * @param evt Event raised when an ApplicationContext gets closed.
+     */
     @EventListener
     public void gracefulShutdown(ContextClosedEvent evt) {
         WebServer container = serverHolder().get();
@@ -299,6 +372,10 @@ public abstract class EmbeddedJettyBase {
         }
     }
 
+    /**
+     * Create a bean with HTTP server info (actual port, connector information, and pool size).
+     * @return HTTP Server info
+     */
     @Bean
     public HttpServerInfo httpServerInfo() {
         return new HttpServerInfo() {
@@ -320,11 +397,19 @@ public abstract class EmbeddedJettyBase {
         };
     }
 
+    /**
+     * An atomic reference to the Web Server
+     * @return an atomic reference to the web server
+     */
     @Bean
     AtomicReference<WebServer> serverHolder() {
         return new AtomicReference<>();
     }
 
+    /**
+     * Get the WebServer and expose it as a Spring bean. This bean will be lazily initialized. It may not be available early in the startup process.
+     * @return the web server once available
+     */
     @VisibleForTesting
     @Bean
     @Lazy
@@ -334,18 +419,36 @@ public abstract class EmbeddedJettyBase {
         return ((JettyWebServer) container).getServer();
     }
 
+    /**
+     * Get the Web Server's thread pool
+     * @return the Web Server request thread pool
+     */
     @VisibleForTesting
     QueuedThreadPool getThreadPool() {
         return (QueuedThreadPool) getServer().getThreadPool();
     }
 
+    /**
+     * Get the port we're listening to for HTTP requests
+     * @return the actual HTTP port for the default HTTP request
+     */
     int getDefaultHttpActualPort() {
         // Safe because state of httpActualPort can only go from null => non null
         Preconditions.checkState(httpActualPort != null, "default connector http port not initialized");
         return httpActualPort;
     }
 
+    /**
+     * An SSL Context factory that uses {@link ServerConnectorConfig}'s keystore and keystore password.
+     * It also allows the use of deprecated ciphers if they are listed in ot.httpserver.ssl-allowed-deprecated-ciphers
+     */
     class SuperSadSslContextFactory extends SslContextFactory {
+
+        /**
+         * Create a Super Sad SSL Context Factory
+         * @param name the connector's name (used only for logging)
+         * @param config the connector configuration, used for keystore name and password
+         */
         SuperSadSslContextFactory(String name, ServerConnectorConfig config) {
             super(config.getKeystore());
             Preconditions.checkState(config.getKeystore() != null, "no keystore specified for '%s'", name);
@@ -370,18 +473,47 @@ public abstract class EmbeddedJettyBase {
         }
     }
 
+    /**
+     * Adapter of the Web Server Factory
+     *
+     * @param <T> the type of {@link WebServerFactory}
+     */
     interface WebServerFactoryAdapter<T> {
 
+        /**
+         * Set the port to be used by the web server
+         * @param port the web server port
+         */
         void setPort(int port);
 
+        /**
+         * Set Jetty server customizers
+         * @param customizers the customizers to apply to the server
+         */
         void addServerCustomizers(JettyServerCustomizer... customizers);
 
+        /**
+         * Set the session timeout
+         * @param duration the session timeout
+         */
         void setSessionTimeout(Duration duration);
 
+        /**
+         * Set the thread pool to use for requests
+         * @param threadPool the thread pool for the web server to use
+         */
         void setThreadPool(ThreadPool threadPool);
 
+        /**
+         * Set initializers of servlet contexts
+         * @param initializers initializers for the web server to use
+         */
         void addInitializers(ServletContextInitializer... initializers);
 
+        /**
+         * Get the Web Server Factory
+         * @return the Web Server Factory
+         */
         T getFactory();
     }
 }

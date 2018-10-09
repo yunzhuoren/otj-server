@@ -30,6 +30,9 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Setup Reasteasy, our JAX-RS implementation
+ */
 @EnableConfigurationProperties
 @Configuration
 public class ResteasyAutoConfiguration {
@@ -46,22 +49,39 @@ public class ResteasyAutoConfiguration {
         return registrationBean;
     }
 
+    /**
+     * Setup the RESTEasy Spring integration
+     * @param servletInitParams optional servlet init params to set
+     * @return the RestEAsy Spring initializer
+     */
     @Bean(destroyMethod = "cleanup")
     @Inject
     public static RestEasySpringInitializer restEasySpringInitializer(Optional<ServletInitParameters> servletInitParams) {
         return new RestEasySpringInitializer(servletInitParams);
     }
 
+    /**
+     * Create a JAX-RS provider that uses Jackson for reading and writing JSON
+     * @param mapper the Jackson Object Mapper to use for reading and writing JSON
+     * @return the Jackson JSON Provider
+     */
     @Bean
     public JacksonJsonProvider jacksonJsonProvider(ObjectMapper mapper) {
         return new JacksonJsonProvider(mapper);
     }
 
+    /**
+     * Create the OT CORS Filter which is a JAX-RS filter that adds CORS headers to all responses
+     * @return the OT CORS Filter
+     */
     @Bean
     public OTCorsFilter corsFilter() {
         return new OTCorsFilter();
     }
 
+    /**
+     * RestEASY Spring Initializer sets up RESTEasy and integrates it with Spring
+     */
     public static class RestEasySpringInitializer
             implements
                 ServletContextInitializer,
@@ -80,6 +100,9 @@ public class ResteasyAutoConfiguration {
             this.servletInitParams = servletInitParams;
         }
 
+        /**
+         * Stop the RestEASY deployment if set up, called by Spring when this bean is being destroyed
+         */
         public void cleanup() {
             if (deployment != null) {
                 deployment.stop();

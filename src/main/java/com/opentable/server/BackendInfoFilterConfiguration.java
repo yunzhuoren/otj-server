@@ -22,7 +22,7 @@ import com.opentable.service.AppInfo;
 import com.opentable.service.ServiceInfo;
 
 /**
- * Adds headers with prefix {@link #HEADER_PREFIX} with some information about the backend that actually
+ * Configures and creates a filter that adds headers with prefix {@link #HEADER_PREFIX} with some information about the backend that actually
  * handled the request. The Front Door filters out these headers for public-facing instances.
  */
 @Configuration
@@ -30,14 +30,29 @@ import com.opentable.service.ServiceInfo;
 public class BackendInfoFilterConfiguration {
     public static final String HEADER_PREFIX = "X-OT-Backend-";
 
+    /**
+     * Creates a filter registration bean for the backend info filter. This will cause Spring to automatically register this bean on the servlet container.
+     *
+     * @param filter the backend info filter to register
+     * @return the filter registration bean
+     */
     @Bean
     public FilterRegistrationBean<BackendInfoFilter> getBackendInfoFilterRegistrationBean(final BackendInfoFilter filter) {
         return new FilterRegistrationBean<>(filter);
     }
 
+    /**
+     * The backend info filter. This adds headers with the prefix X-OT-Backend- that have info about this backend
+     */
     public static class BackendInfoFilter implements Filter {
         private final Map<String, String> headers;
 
+        /**
+         * Construct a backend info filter. This creates the headers to add.
+         *
+         * @param appInfo information about this environment and the application it is deployed in
+         * @param serviceInfo information about this service
+         */
         BackendInfoFilter(final AppInfo appInfo, final ServiceInfo serviceInfo) {
             headers = assembleInfo(appInfo, serviceInfo);
         }
@@ -61,6 +76,7 @@ public class BackendInfoFilterConfiguration {
         public void destroy() {}
 
         /**
+         * Creates a map of headers about backend info to add to responses
          * @return map of headers we'll add to responses; unavailable information will result in headers
          * not being set
          */
@@ -84,6 +100,11 @@ public class BackendInfoFilterConfiguration {
             return builder.build();
         }
 
+        /**
+         * Get the given header name after adding the prefix {@code X-OT-Backend-}
+         * @param name the name to prefix with {@code X-OT-Backend-}
+         * @return the header prefixed by {@code X-OT-Backend-}
+         */
         private static String named(final String name) {
             return HEADER_PREFIX + name;
         }
